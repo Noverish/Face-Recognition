@@ -1,4 +1,3 @@
-
 from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
@@ -146,6 +145,7 @@ def detect_face(img, minsize, pnet, rnet, onet, threshold, factor):
 
     return total_boxes, points
 
+
 def layer(op):
     def layer_decorated(self, *args, **kwargs):
         # Automatically set a name if not provided.
@@ -168,6 +168,7 @@ def layer(op):
 
     return layer_decorated
 
+
 class Network(object):
 
     def __init__(self, inputs, trainable=True):
@@ -183,15 +184,9 @@ class Network(object):
         self.setup()
 
     def setup(self):
-        """Construct the network. """
         raise NotImplementedError('Must be implemented by the subclass.')
 
     def load(self, data_path, session, ignore_missing=False):
-        """Load network weights.
-        data_path: The path to the numpy-serialized network weights
-        session: The current TensorFlow session
-        ignore_missing: If true, serialized weights for missing layers are ignored.
-        """
         data_dict = np.load(data_path, encoding='latin1').item()  # pylint: disable=no-member
 
         for op_name in data_dict:
@@ -205,9 +200,6 @@ class Network(object):
                             raise
 
     def feed(self, *args):
-        """Set the input(s) for the next operation by replacing the terminal nodes.
-        The arguments can be either layer names or the actual layers.
-        """
         assert len(args) != 0
         self.terminals = []
         for fed_layer in args:
@@ -220,22 +212,16 @@ class Network(object):
         return self
 
     def get_output(self):
-        """Returns the current network output."""
         return self.terminals[-1]
 
     def get_unique_name(self, prefix):
-        """Returns an index-suffixed unique name for the given prefix.
-        This is used for auto-generating layer names based on the type-prefix.
-        """
         ident = sum(t.startswith(prefix) for t, _ in self.layers.items()) + 1
         return '%s_%d' % (prefix, ident)
 
     def make_var(self, name, shape):
-        """Creates a new TensorFlow variable."""
         return tf.get_variable(name, shape, trainable=self.trainable)
 
     def validate_padding(self, padding):
-        """Verifies that the padding is one of the supported ones."""
         assert padding in ('SAME', 'VALID')
 
     @layer
@@ -308,13 +294,6 @@ class Network(object):
             fc = op(feed_in, weights, biases, name=name)
             return fc
 
-    """
-    Multi dimensional softmax,
-    refer to https://github.com/tensorflow/tensorflow/issues/210
-    compute softmax along the dimension of target
-    the native softmax only supports batch_size x dimension
-    """
-
     @layer
     def softmax(self, target, axis, name=None):
         max_axis = tf.reduce_max(target, axis, keepdims=True)
@@ -326,7 +305,7 @@ class Network(object):
 
 class PNet(Network):
     def setup(self):
-        (self.feed('data')  # pylint: disable=no-value-for-parameter, no-member
+        (self.feed('data')
          .conv(3, 3, 10, 1, 1, padding='VALID', relu=False, name='conv1')
          .prelu(name='PReLU1')
          .max_pool(2, 2, 2, 2, name='pool1')
@@ -337,13 +316,13 @@ class PNet(Network):
          .conv(1, 1, 2, 1, 1, relu=False, name='conv4-1')
          .softmax(3, name='prob1'))
 
-        (self.feed('PReLU3')  # pylint: disable=no-value-for-parameter
+        (self.feed('PReLU3')
          .conv(1, 1, 4, 1, 1, relu=False, name='conv4-2'))
 
 
 class RNet(Network):
     def setup(self):
-        (self.feed('data')  # pylint: disable=no-value-for-parameter, no-member
+        (self.feed('data')
          .conv(3, 3, 28, 1, 1, padding='VALID', relu=False, name='conv1')
          .prelu(name='prelu1')
          .max_pool(3, 3, 2, 2, name='pool1')
@@ -357,13 +336,13 @@ class RNet(Network):
          .fc(2, relu=False, name='conv5-1')
          .softmax(1, name='prob1'))
 
-        (self.feed('prelu4')  # pylint: disable=no-value-for-parameter
+        (self.feed('prelu4')
          .fc(4, relu=False, name='conv5-2'))
 
 
 class ONet(Network):
     def setup(self):
-        (self.feed('data')  # pylint: disable=no-value-for-parameter, no-member
+        (self.feed('data')
          .conv(3, 3, 32, 1, 1, padding='VALID', relu=False, name='conv1')
          .prelu(name='prelu1')
          .max_pool(3, 3, 2, 2, name='pool1')
@@ -380,10 +359,10 @@ class ONet(Network):
          .fc(2, relu=False, name='conv6-1')
          .softmax(1, name='prob1'))
 
-        (self.feed('prelu5')  # pylint: disable=no-value-for-parameter
+        (self.feed('prelu5')
          .fc(4, relu=False, name='conv6-2'))
 
-        (self.feed('prelu5')  # pylint: disable=no-value-for-parameter
+        (self.feed('prelu5')
          .fc(10, relu=False, name='conv6-3'))
 
 
@@ -393,7 +372,6 @@ def imresample(img, sz):
 
 
 def generateBoundingBox(imap, reg, scale, t):
-    """Use heatmap to generate bounding boxes"""
     stride = 2
     cellsize = 12
 
@@ -453,7 +431,6 @@ def nms(boxes, threshold, method):
 
 
 def bbreg(boundingbox, reg):
-    """Calibrate bounding boxes"""
     if reg.shape[1] == 1:
         reg = np.reshape(reg, (reg.shape[2], reg.shape[3]))
 
@@ -468,7 +445,6 @@ def bbreg(boundingbox, reg):
 
 
 def rerec(bboxA):
-    """Convert bboxA to square."""
     h = bboxA[:, 3] - bboxA[:, 1]
     w = bboxA[:, 2] - bboxA[:, 0]
     l = np.maximum(w, h)
@@ -479,7 +455,6 @@ def rerec(bboxA):
 
 
 def pad(total_boxes, w, h):
-    """Compute the padding coordinates (pad the bounding boxes to square)"""
     tmpw = (total_boxes[:, 2] - total_boxes[:, 0] + 1).astype(np.int32)
     tmph = (total_boxes[:, 3] - total_boxes[:, 1] + 1).astype(np.int32)
     numbox = total_boxes.shape[0]
