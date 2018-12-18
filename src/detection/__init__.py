@@ -1,66 +1,92 @@
-import tensorflow as tf
-import cv2
-import numpy as np
+from __future__ import absolute_import
+from __future__ import division
+from __future__ import print_function
 
-from src.detection.mtcnn import PNet, RNet, ONet
-from src.detection.tools import detect_face, get_model_filenames
+from scipy import misc
+import tensorflow as tf
+import src.detection.detect_face
+import os
+from pprint import pprint
 
 minsize = 20
-threshold = [0.8, 0.8, 0.8]
-factor = 0.7
+threshold = [0.6, 0.7, 0.7]
+factor = 0.709
+gpu_memory_fraction = 1.0
 
-model_path = './src/detection/mtcnn_model'
+pnet = None
+rnet = None
+onet = None
+
+model_path = os.path.join(os.path.split(__file__)[0], '../../models/detection/')
 
 
-def detect(image_path):
-    img = cv2.imread(image_path)
-    file_paths = get_model_filenames(model_path)
-    with tf.device('/cpu:0'):
-        with tf.Graph().as_default():
-            config = tf.ConfigProto(allow_soft_placement=True)
-            with tf.Session(config=config) as sess:
-                saver = tf.train.import_meta_graph(file_paths[0])
-                saver.restore(sess, file_paths[1])
+def load_mtcnn_net():
+    global pnet
+    global rnet
+    global onet
 
-                def pnet_fun(img):
-                    return sess.run(
-                        ('softmax/Reshape_1:0',
-                         'pnet/conv4-2/BiasAdd:0'),
-                        feed_dict={
-                            'Placeholder:0': img})
+    with tf.Graph().as_default():
+        # gpu_options = tf.GPUOptions(per_process_gpu_memory_fraction=gpu_memory_fraction)
+        # sess = tf.Session(config=tf.ConfigProto(gpu_options=gpu_options, log_device_placement=False))
+        sess = tf.Session()
+        with sess.as_default():
+            pnet, rnet, onet = detect_face.create_mtcnn(sess, model_path)
 
-                def rnet_fun(img):
-                    return sess.run(
-                        ('softmax_1/softmax:0',
-                         'rnet/conv5-2/rnet/conv5-2:0'),
-                        feed_dict={
-                            'Placeholder_1:0': img})
 
-                def onet_fun(img):
-                    return sess.run(
-                        ('softmax_2/softmax:0',
-                         'onet/conv6-2/onet/conv6-2:0',
-                         'onet/conv6-3/onet/conv6-3:0'),
-                        feed_dict={
-                            'Placeholder_2:0': img})
+def detect(image_path_list, detect_multiple=False, verbose=True):
+    global pnet
+    global rnet
+    global onet
 
-                rectangles, points = detect_face(img, minsize,
-                                                 pnet_fun, rnet_fun, onet_fun,
-                                                 threshold, factor)
+    if pnet is None or rnet is None or onet is None:
+        load_mtcnn_net()
 
-                points = np.transpose(points)
-                for rectangle in rectangles:
-                    cv2.putText(img, str(rectangle[4]),
-                                (int(rectangle[0]), int(rectangle[1])),
-                                cv2.FONT_HERSHEY_SIMPLEX,
-                                0.5, (0, 255, 0))
-                    cv2.rectangle(img, (int(rectangle[0]), int(rectangle[1])),
-                                  (int(rectangle[2]), int(rectangle[3])),
-                                  (255, 0, 0), 1)
-                for point in points:
-                    for i in range(0, 10, 2):
-                        cv2.circle(img, (int(point[i]), int(
-                            point[i + 1])), 2, (0, 255, 0))
-                cv2.imwrite('result.jpg', img)
+    faces = []
 
-                return rectangles, points
+    for i in range(len(image_path_list)):
+        image_path = image_path_list[i]
+        img = misc.imread(image_path)
+        bounding_boxes, _ = detect_face.detect_face(img, minsize, pnet, rnet, onet, threshold, factor)
+
+        face_num_in_picture = bounding_boxes.shape[0]
+
+        if face_num_in_picture == 0:
+            faces.append(None)
+            continue
+
+        faces_in_picture = []
+        faces_size = []
+
+        for j in range(face_num_in_picture):
+            box = bounding_boxes[j]
+            rect = {
+                'left': box[1],
+                'right': box[3],
+                'top': box[0],
+                'bottom': box[2]
+            }
+            size = (rect['right'] - rect['left']) * (rect['bottom'] - rect['top'])
+
+            faces_in_picture.append(rect)
+            faces_size.append(size)
+
+        if detect_multiple:
+            faces.append(faces_in_picture)
+        else:
+            largest_index = faces_size.index(max(faces_size))
+            largest_rect = faces_in_picture[largest_index]
+            faces.append(largest_rect)
+
+        if (i + 1) % 100 == 0 and verbose:
+            print('Detecting faces... ({}/{})'.format(i + 1, len(image_path_list)))
+
+    return faces
+
+
+def detect_one(image_path, detect_multiple=False):
+    detected_list = detect([image_path], detect_multiple)
+
+    if len(detected_list) > 0:
+        return detected_list[0]
+    else:
+        return None

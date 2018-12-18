@@ -1,5 +1,6 @@
 .idea/
-inputs/
+models/
+preprocessed/
 
 # Created by https://www.gitignore.io/api/macos,python,pycharm+iml,jupyternotebook
 # Edit at https://www.gitignore.io/?templates=macos,python,pycharm+iml,jupyternotebook
