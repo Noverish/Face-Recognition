@@ -20,7 +20,9 @@ if __name__ == '__main__':
         image_paths, labels, class_list = process.process_extraction(input_path)
         image_paths, labels, rect_list = process.process_detection(image_paths, labels)
         cropped_list = process.process_cropping(image_paths, rect_list)
-        standardized_list = process.process_standardization(cropped_list)
+        image_paths, labels, augmented_list = process.process_augmentation(image_paths, labels, cropped_list)
+        aligned_list = process.process_alignment(augmented_list)
+        standardized_list = process.process_standardization(aligned_list)
         embedded_list = process.process_embedding(standardized_list)
 
         util.save_as_pickle(preprocessed_path, (image_paths, labels, class_list, embedded_list))

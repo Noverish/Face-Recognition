@@ -1,6 +1,8 @@
 import src.extraction as extraction
 import src.detection as detection
 import src.cropping as cropping
+import src.augmentation as augmentation
+import src.alignment as alignment
 import src.standardization as standardization
 import src.embedding as embedding
 import src.clustering as clustering
@@ -43,6 +45,25 @@ def process_cropping(image_paths, rect_list, img_size=160, margin=0):
     print('Cropped')
 
     return cropped_list
+
+
+def process_augmentation(image_paths, labels, images):
+    # Augment images
+    augmented_image_paths, augmented_labels, augmented_images = augmentation.augment(image_paths, labels, images)
+    assert len(augmented_image_paths) == len(augmented_labels)
+    assert len(augmented_image_paths) == augmented_images.shape[0]
+    print('Augmented')
+
+    return augmented_image_paths, augmented_labels, augmented_images
+
+
+def process_alignment(images):
+    # Align Faces
+    new_images = alignment.align(images)
+    assert images.shape == new_images.shape
+    print('Aligned')
+
+    return new_images
 
 
 def process_standardization(cropped_list):
